@@ -32,6 +32,9 @@ import {
   UserPreferencesProvider,
   useUserPreferences,
 } from "src/context/UserPrefencesContext";
+import {getSudokusPaginated, useSudokuCollections} from "src/lib/game/sudokus";
+import {t} from "i18next";
+import {translateCollectionName} from "src/lib/database/collections";
 
 function PauseButton({
   disabled,
@@ -98,6 +101,74 @@ const NewGameButton: React.FC = () => {
     <Button className="bg-teal-600 dark:bg-teal-600 text-white" onClick={pauseAndChoose}>
       {t("new_game")}
     </Button>
+  );
+};
+
+const NextSudokuButton: React.FC<{gameState: GameState; setDisableAutoSync: (disabled: boolean) => void}> = ({
+  gameState,
+  setDisableAutoSync,
+}) => {
+  const {getCollection} = useSudokuCollections();
+  const collection = React.useMemo(
+    () => getCollection(gameState.sudokuCollectionName),
+    [gameState.sudokuCollectionName, getCollection],
+  );
+
+  // Pre-calculate next sudoku parameters
+  const nextSudokuParams = React.useMemo(() => {
+    try {
+      const nextIndex = gameState.sudokuIndex + 1;
+
+      const result = getSudokusPaginated(collection, nextIndex, 1);
+      const sudoku = result.sudokus[0];
+
+      if (sudoku) {
+        return {
+          sudokuIndex: nextIndex + 1,
+          sudoku: stringifySudoku(sudoku.sudoku),
+          sudokuCollectionName: gameState.sudokuCollectionName,
+        };
+      }
+    } catch (error) {
+      console.error("Error calculating next sudoku:", error);
+    }
+    return null;
+  }, [gameState.sudokuIndex, gameState.sudokuCollectionName, collection]);
+
+  if (!nextSudokuParams) {
+    return (
+      <div>
+        <p className="dark:text-white text-black mb-4 max-w-64 text-center">
+          {`Congratulation! You arrived at the end of collection "${translateCollectionName(collection.name)}". Select a new sudoku to play.`}
+          {t("collection_finished", {collection: translateCollectionName(collection.name)})}
+        </p>
+        <Link to="/select-game" className="w-full">
+          <Button className="bg-teal-700 text-white w-full">{t("select_new_sudoku")}</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  const handleClick = () => {
+    // TODO: Hacky solution for now, but it works.
+    // What is happening is that we sync the URL state, but us changing the URL here
+    // Will lead to an out of sync state with the game state.
+    setDisableAutoSync(true);
+    // Re-enable after a short delay to let navigation complete
+    setTimeout(() => {
+      setDisableAutoSync(false);
+    }, 2000);
+  };
+
+  return (
+    <Link to="/" search={nextSudokuParams} className="w-full" onClick={handleClick}>
+      <Button className="bg-teal-700 text-white w-full">
+        {t("select_next_sudoku", {
+          collection: translateCollectionName(collection.name),
+          sudokuIndex: nextSudokuParams.sudokuIndex,
+        })}
+      </Button>
+    </Link>
   );
 };
 
@@ -256,6 +327,7 @@ const GameInner: React.FC<{
   hideMenu: () => void;
   resetGame: () => void;
   deactivateNotesMode: () => void;
+  setDisableAutoSync: (disabled: boolean) => void;
 }> = ({
   sudokuState,
   setSudoku,
@@ -276,6 +348,7 @@ const GameInner: React.FC<{
   hideMenu,
   resetGame,
   deactivateNotesMode,
+  setDisableAutoSync,
 }) => {
   const canUndo = sudokuState.historyIndex < sudokuState.history.length - 1;
   const sudoku = sudokuState.current;
@@ -341,7 +414,7 @@ const GameInner: React.FC<{
         <header className="flex justify-between sm:items-center mt-4">
           <div className="flex text-white flex-col sm:flex-row sm:justify-end sm:items-center gap-2">
             <div className="flex gap-2 items-center">
-              <DifficultyShow>{`${t("difficulty_" + game.sudokuCollectionName)} #${game.sudokuIndex + 1}`}</DifficultyShow>
+              <DifficultyShow>{`${translateCollectionName(game.sudokuCollectionName)} #${game.sudokuIndex + 1}`}</DifficultyShow>
               <ShareButton gameState={game} sudokuState={sudokuState} />
             </div>
             <div className="hidden sm:block">{"|"}</div>
@@ -417,9 +490,7 @@ const GameInner: React.FC<{
                         </div>
                       </div>
                     </div>
-                    <Link to="/select-game" className="w-full">
-                      <Button className="bg-teal-700 text-white w-full">{t("select_next_sudoku")}</Button>
-                    </Link>
+                    <NextSudokuButton gameState={game} setDisableAutoSync={setDisableAutoSync} />
                   </div>
                 </div>
               )}
@@ -524,6 +595,7 @@ const GameWithRouteManagement = () => {
     redo,
   } = useSudoku();
   const [initialized, setInitialized] = React.useState(false);
+  const [disableAutoSync, setDisableAutoSync] = React.useState(false);
   const navigate = useNavigate();
   const {t} = useTranslation();
 
@@ -534,7 +606,7 @@ const GameWithRouteManagement = () => {
   const sudokuCollectionName = search["sudokuCollectionName"] as string | undefined;
 
   useEffect(() => {
-    if (gameState && sudokuState && initialized && currentPath === "/") {
+    if (gameState && sudokuState && initialized && currentPath === "/" && !disableAutoSync) {
       throttledSave(gameState, sudokuState);
       // Also update the URL to the current game state if it differs.
       const stringifiedSudoku = stringifySudoku(cellsToSimpleSudoku(sudokuState.current));
@@ -551,7 +623,7 @@ const GameWithRouteManagement = () => {
         });
       }
     }
-  }, [gameState, sudokuState, initialized, currentPath, sudoku, navigate]);
+  }, [gameState, sudokuState, initialized, currentPath, sudoku, navigate, disableAutoSync]);
 
   // In the AppProvider, we load the sudoku from the local storage.
   // TODO: Combine it with this logic.
@@ -664,6 +736,7 @@ const GameWithRouteManagement = () => {
       hideMenu={hideMenu}
       resetGame={resetGame}
       deactivateNotesMode={deactivateNotesMode}
+      setDisableAutoSync={setDisableAutoSync}
     />
   );
 };
