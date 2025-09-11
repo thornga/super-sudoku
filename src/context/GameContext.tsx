@@ -1,6 +1,7 @@
 import React, {createContext, useContext, useReducer, useCallback, ReactNode} from "react";
 import {CellCoordinates} from "src/lib/engine/types";
 import {START_SUDOKU_COLLECTION, START_SUDOKU_INDEX} from "src/lib/game/sudokus";
+import {localStorageUserPreferencesRepository} from "src/lib/database/userPreferences";
 
 export enum GameStateMachine {
   running = "RUNNING",
@@ -11,13 +12,8 @@ export interface GameState {
   activeCellCoordinates?: CellCoordinates;
   sudokuCollectionName: string;
   notesMode: boolean;
-  showCircleMenu: boolean;
-  showHints: boolean;
-  showMenu: boolean;
-  showOccurrences: boolean;
-  showWrongEntries: boolean;
-  showConflicts: boolean;
   showNotes: boolean;
+  showMenu: boolean;
   state: GameStateMachine;
   sudokuIndex: number;
   won: boolean;
@@ -30,11 +26,6 @@ export const INITIAL_GAME_STATE: GameState = {
   activeCellCoordinates: undefined,
   sudokuCollectionName: START_SUDOKU_COLLECTION.name,
   notesMode: false,
-  showCircleMenu: true,
-  showHints: false,
-  showConflicts: true,
-  showOccurrences: false,
-  showWrongEntries: false,
   showMenu: false,
   showNotes: false,
   state: GameStateMachine.paused,
@@ -55,11 +46,6 @@ const RESTART_GAME = "game/RESTART_GAME";
 const SHOW_MENU = "game/SHOW_MENU";
 const HIDE_MENU = "game/HIDE_MENU";
 const SELECT_CELL = "game/SELECT_MENU";
-const TOGGLE_SHOW_HINTS = "game/TOGGLE_SHOW_HINTS";
-const TOGGLE_SHOW_OCCURRENCES = "game/TOGGLE_SHOW_OCCURRENCES";
-const TOGGLE_SHOW_CONFLICTS = "game/TOGGLE_SHOW_CONFLICTS";
-const TOGGLE_SHOW_CIRCLE_MENU = "game/TOGGLE_SHOW_CIRCLE_MENU";
-const TOGGLE_SHOW_WRONG_ENTRIES = "game/TOGGLE_SHOW_WRONG_ENTRIES";
 const ACTIVATE_NOTES_MODE = "game/ACTIVATE_NOTES_MODE";
 const DEACTIVATE_NOTES_MODE = "game/DEACTIVATE_NOTES_MODE";
 const UPDATE_TIMER = "game/UPDATE_TIME";
@@ -86,11 +72,6 @@ type GameAction =
   | {type: typeof SHOW_MENU; showNotes?: boolean}
   | {type: typeof HIDE_MENU}
   | {type: typeof SELECT_CELL; cellCoordinates: CellCoordinates}
-  | {type: typeof TOGGLE_SHOW_HINTS}
-  | {type: typeof TOGGLE_SHOW_OCCURRENCES}
-  | {type: typeof TOGGLE_SHOW_CONFLICTS}
-  | {type: typeof TOGGLE_SHOW_CIRCLE_MENU}
-  | {type: typeof TOGGLE_SHOW_WRONG_ENTRIES}
   | {type: typeof ACTIVATE_NOTES_MODE}
   | {type: typeof DEACTIVATE_NOTES_MODE}
   | {type: typeof UPDATE_TIMER; secondsPlayed: number}
@@ -102,6 +83,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case SET_GAME_STATE:
       return action.state;
     case NEW_GAME:
+      const currentPreferences = localStorageUserPreferencesRepository.getPreferences();
       return {
         ...INITIAL_GAME_STATE,
         sudokuIndex: action.sudokuIndex,
@@ -109,6 +91,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         timesSolved: action.timesSolved,
         previousTimes: action.previousTimes,
         state: GameStateMachine.running,
+        ...currentPreferences,
       };
     case WON_GAME:
       const justWon = state.won === false;
@@ -161,31 +144,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         activeCellCoordinates: action.cellCoordinates,
       };
-    case TOGGLE_SHOW_HINTS:
-      return {
-        ...state,
-        showHints: !state.showHints,
-      };
-    case TOGGLE_SHOW_OCCURRENCES:
-      return {
-        ...state,
-        showOccurrences: !state.showOccurrences,
-      };
-    case TOGGLE_SHOW_CONFLICTS:
-      return {
-        ...state,
-        showConflicts: !state.showConflicts,
-      };
-    case TOGGLE_SHOW_CIRCLE_MENU:
-      return {
-        ...state,
-        showCircleMenu: !state.showCircleMenu,
-      };
-    case TOGGLE_SHOW_WRONG_ENTRIES:
-      return {
-        ...state,
-        showWrongEntries: !state.showWrongEntries,
-      };
     case ACTIVATE_NOTES_MODE:
       return {
         ...state,
@@ -229,11 +187,6 @@ interface GameContextType {
     timesSolved: number,
     previousTimes: number[],
   ) => void;
-  toggleShowHints: () => void;
-  toggleShowOccurrences: () => void;
-  toggleShowConflicts: () => void;
-  toggleShowCircleMenu: () => void;
-  toggleShowWrongEntries: () => void;
   activateNotesMode: () => void;
   deactivateNotesMode: () => void;
   updateTimer: (secondsPlayed: number) => void;
@@ -292,26 +245,6 @@ export function GameProvider({children, initialState = INITIAL_GAME_STATE}: Game
     [],
   );
 
-  const toggleShowHints = useCallback(() => {
-    dispatch({type: TOGGLE_SHOW_HINTS});
-  }, []);
-
-  const toggleShowOccurrences = useCallback(() => {
-    dispatch({type: TOGGLE_SHOW_OCCURRENCES});
-  }, []);
-
-  const toggleShowConflicts = useCallback(() => {
-    dispatch({type: TOGGLE_SHOW_CONFLICTS});
-  }, []);
-
-  const toggleShowCircleMenu = useCallback(() => {
-    dispatch({type: TOGGLE_SHOW_CIRCLE_MENU});
-  }, []);
-
-  const toggleShowWrongEntries = useCallback(() => {
-    dispatch({type: TOGGLE_SHOW_WRONG_ENTRIES});
-  }, []);
-
   const activateNotesMode = useCallback(() => {
     dispatch({type: ACTIVATE_NOTES_MODE});
   }, []);
@@ -339,11 +272,6 @@ export function GameProvider({children, initialState = INITIAL_GAME_STATE}: Game
     showMenu,
     hideMenu,
     restartGame,
-    toggleShowHints,
-    toggleShowOccurrences,
-    toggleShowConflicts,
-    toggleShowCircleMenu,
-    toggleShowWrongEntries,
     activateNotesMode,
     deactivateNotesMode,
     updateTimer,
