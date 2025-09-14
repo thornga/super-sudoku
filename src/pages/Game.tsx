@@ -646,9 +646,9 @@ const GameWithRouteManagement = () => {
     if (gameState.secondsPlayed > 5 && !gameState.won) {
       const areYouSure = confirm(
         t("confirm_new_game", {
-          currentCollection: gameState.sudokuCollectionName,
+          currentCollectionName: translateCollectionName(gameState.sudokuCollectionName),
           currentIndex: gameState.sudokuIndex + 1,
-          newCollection: sudokuCollectionName,
+          newCollectionName: translateCollectionName(sudokuCollectionName),
           newIndex: sudokuIndex,
         }),
       );
